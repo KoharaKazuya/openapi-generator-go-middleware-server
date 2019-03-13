@@ -1,0 +1,17 @@
+package {{packageName}}
+
+{{#operations}}
+import (
+	"context"
+	"time"
+){{#operation}}
+
+// {{nickname}}Action - {{summary}}
+type {{nickname}}Action func(ctx context.Context{{#pathParams}}, {{paramName}} {{dataType}}{{/pathParams}}{{#queryParams}}, {{paramName}} {{dataType}}{{/queryParams}}{{#bodyParam}}, {{paramName}} {{dataType}}{{/bodyParam}}) (Response, error)
+
+{{#responses}}// {{#vendorExtensions}}{{x-responseDataType}}{{/vendorExtensions}} - {{message}}
+type {{#vendorExtensions}}{{x-responseDataType}}{{/vendorExtensions}} struct {
+{{#dataType}}	Body {{dataType}}{{/dataType}}
+}
+
+{{/responses}}{{/operation}}{{/operations}}

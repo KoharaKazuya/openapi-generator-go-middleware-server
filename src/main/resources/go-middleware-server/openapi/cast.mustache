@@ -1,0 +1,130 @@
+package {{packageName}}
+
+import (
+	"reflect"
+	"strconv"
+	"strings"
+	"time"
+
+	"golang.org/x/xerrors"
+)
+
+// cast converts from string of `from` to type `to`
+func cast(from string, to interface{}) error {
+	switch v := to.(type) {
+	case (*int32):
+		v64, err := strconv.ParseInt(from, 10, 64)
+		if err != nil {
+			return err
+		}
+		*v = int32(v64)
+	case (*int64):
+		v64, err := strconv.ParseInt(from, 10, 64)
+		if err != nil {
+			return err
+		}
+		*v = v64
+	case (*float32):
+		v64, err := strconv.ParseFloat(from, 32)
+		if err != nil {
+			return err
+		}
+		*v = float32(v64)
+	case (*float64):
+		v64, err := strconv.ParseFloat(from, 64)
+		if err != nil {
+			return err
+		}
+		*v = v64
+	case (*bool):
+		switch strings.ToLower(from) {
+		case "true":
+			*v = true
+		case "false":
+			*v = false
+		default:
+			return xerrors.New("cast error: \"" + from + "\" is not \"true\" nor \"false\"")
+		}
+	case (*string):
+		*v = from
+	case (*time.Time):
+		t, err := time.Parse(time.RFC3339, from)
+		if err != nil {
+			return xerrors.Errorf("cast error: %w", err)
+		}
+		*v = t
+	default:
+		return xerrors.New("cast error: " + reflect.TypeOf(to).String() + " is unknown type")
+	}
+	return nil
+}
+
+func castArray(from []string, to interface{}) error {
+	switch v := to.(type) {
+	case (*[]int32):
+		var ts []int32
+		for _, f := range from {
+			var t int32
+			if err := cast(f, &t); err != nil {
+				return err
+			}
+			ts = append(ts, t)
+		}
+		*v = ts
+	case (*[]int64):
+		var ts []int64
+		for _, f := range from {
+			var t int64
+			if err := cast(f, &t); err != nil {
+				return err
+			}
+			ts = append(ts, t)
+		}
+		*v = ts
+	case (*[]float32):
+		var ts []float32
+		for _, f := range from {
+			var t float32
+			if err := cast(f, &t); err != nil {
+				return err
+			}
+			ts = append(ts, t)
+		}
+		*v = ts
+	case (*[]float64):
+		var ts []float64
+		for _, f := range from {
+			var t float64
+			if err := cast(f, &t); err != nil {
+				return err
+			}
+			ts = append(ts, t)
+		}
+		*v = ts
+	case (*[]bool):
+		var ts []bool
+		for _, f := range from {
+			var t bool
+			if err := cast(f, &t); err != nil {
+				return err
+			}
+			ts = append(ts, t)
+		}
+		*v = ts
+	case (*[]string):
+		*v = from
+	case (*[]time.Time):
+		var ts []time.Time
+		for _, f := range from {
+			var t time.Time
+			if err := cast(f, &t); err != nil {
+				return err
+			}
+			ts = append(ts, t)
+		}
+		*v = ts
+	default:
+		return xerrors.New("cast error: " + reflect.TypeOf(to).String() + " is unknown type")
+	}
+	return nil
+}
