@@ -2,7 +2,7 @@ FROM maven:3.6.0-jdk-8-alpine AS builder
 
 RUN mkdir /work
 WORKDIR /work
-COPY ./* /work/
+COPY . /work/
 RUN mvn package
 
 
