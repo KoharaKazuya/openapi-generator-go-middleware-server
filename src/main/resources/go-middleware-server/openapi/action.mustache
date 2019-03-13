@@ -1,0 +1,16 @@
+package {{packageName}}
+{{#apiInfo}}
+
+// Actions は Action の名前付きリスト
+// Action は一つの HTTP エンドポイントに対応し、それぞれサービスを提供する
+//
+// Action はその返り値に自動生成された
+// `${Action 名}ActionResponse${HTTP ステータスコード}` 構造体のいずれかを
+// 使用しなければならない
+type Actions struct {
+{{#apis}}{{#operations}}	// {{classname}}
+{{#operation}}	{{nickname}} {{nickname}}Action
+{{/operation}}
+{{/operations}}{{/apis}}
+}
+{{/apiInfo}}

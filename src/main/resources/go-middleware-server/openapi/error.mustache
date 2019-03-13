@@ -1,0 +1,68 @@
+package {{packageName}}
+
+import (
+	"fmt"
+	"net/http"
+
+	"golang.org/x/xerrors"
+)
+
+// RequestHandleError はリクエスト処理中のエラー
+type RequestHandleError struct {
+	Request *http.Request
+	msg     string
+	err     error
+	frame   xerrors.Frame
+}
+
+func newRequestHandleError(req *http.Request, msg string, err error) error {
+	return &RequestHandleError{
+		Request: req,
+		msg:     msg,
+		err:     err,
+		frame:   xerrors.Caller(2),
+	}
+}
+
+func (e *RequestHandleError) Error() string {
+	return fmt.Sprintf(
+		"failed to handle request method=%s path=%s: %s",
+		e.Request.Method,
+		e.Request.URL.Path,
+		e.msg,
+	)
+}
+
+// Format implements for xerrors
+func (e *RequestHandleError) Format(s fmt.State, v rune) {
+	xerrors.FormatError(e, s, v)
+}
+
+// FormatError implements for xerrors
+func (e *RequestHandleError) FormatError(p xerrors.Printer) error {
+	p.Print(e.Error())
+	e.frame.Format(p)
+	return e.err
+}
+
+// Unwrap implements for xerrors
+func (e *RequestHandleError) Unwrap() error {
+	return e.err
+}
+
+func newKinFindRouteError(req *http.Request, err error) error {
+	return newRequestHandleError(req, "kin find route error", err)
+}
+
+func newActionError(req *http.Request, err error) error {
+	return newRequestHandleError(req, "action error", err)
+}
+
+func newUnknownTypeActionResultError(req *http.Request, res Response) error {
+	msg := fmt.Sprintf("unknown type `%T` of action result", res)
+	return newRequestHandleError(req, msg, nil)
+}
+
+func newJSONDeserializationError(req *http.Request, err error) error {
+	return newRequestHandleError(req, "failed to deserialize JSON", err)
+}

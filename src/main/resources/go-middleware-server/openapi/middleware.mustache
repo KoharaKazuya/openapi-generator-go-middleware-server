@@ -1,0 +1,134 @@
+package {{packageName}}
+{{#apiInfo}}
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"path/filepath"
+	"time"
+
+	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/go-chi/chi"
+)
+
+// MiddlewareOptions は Middleware を生成するときのオプション
+type MiddlewareOptions struct {
+	Actions          Actions
+	// ErrorLogger は Middleware 中で発生したエラーを記録する関数
+	ErrorLogger func(error)
+	// DocumentFilePath は OpenAPI ドキュメントであるファイルのパス
+	DocumentFilePath string
+}
+
+// NewMiddleware は新しく Middleware を生成する
+// Middleware は `func(http.Handler) http.Handler` のシグネチャを持つ関数
+func NewMiddleware(options MiddlewareOptions) func(http.Handler) http.Handler {
+	// Normalize options
+	errorLogger := options.ErrorLogger
+	if errorLogger == nil {
+		errorLogger = func(err error) { log.Printf("%+v\n", err) }
+	}
+
+	docPath := options.DocumentFilePath
+	if docPath == "" {
+		docPath = filepath.Join("api", "openapi.yaml")
+	}
+
+	return func(next http.Handler) http.Handler {
+		kinRouter := openapi3filter.NewRouter().WithSwaggerFromFile(docPath)
+		router := chi.NewRouter()
+
+		router.NotFound(next.ServeHTTP)
+		router.MethodNotAllowed(next.ServeHTTP)
+
+{{#apis}}{{#operations}}		// {{classname}}
+{{#operation}}		router.{{httpMethod}}("{{{basePathWithoutHost}}}{{{path}}}", func(w http.ResponseWriter, req *http.Request) {
+			// make sure action implemented
+			if options.Actions.{{nickname}} == nil {
+				writeJSONActionNotImplemented(w, errorLogger, "{{nickname}}")
+				return
+			}
+
+			// validate request
+			kinRoute, pathParams, err := kinRouter.FindRoute(req.Method, req.URL)
+			if err != nil {
+				errorLogger(newKinFindRouteError(req, err))
+				writeJSONInternalServerError(w, errorLogger)
+				return
+			}
+			if err := openapi3filter.ValidateRequest(
+				req.Context(),
+				&openapi3filter.RequestValidationInput{
+					Request:    req,
+					PathParams: pathParams,
+					Route:      kinRoute,
+				},
+			); err != nil {
+				writeJSON(w, http.StatusBadRequest, ErrorResponse{
+					Title:  "Invalid Request",
+					Detail: err.Error(),
+				}, errorLogger)
+				return
+			}
+
+			// get path parameters
+{{#pathParams}}			var {{paramName}} {{dataType}}
+			{{paramName}}Str := chi.URLParam(req, "{{paramName}}")
+			if err := cast({{paramName}}Str, &{{paramName}}); err != nil {
+				writeJSON(w, http.StatusBadRequest, ErrorResponse{
+					Title:  "Invalid Path Parameter",
+					Detail: "Path parameter `{{paramName}}` must be a {{dataType}}, but \"" + {{paramName}}Str + "\" specified.\n" + err.Error(),
+				}, errorLogger)
+				return
+			}
+{{/pathParams}}
+
+			// get query parameters
+{{#queryParams}}			var {{paramName}} {{dataType}}
+			{{paramName}}Str := req.URL.Query(){{#isListContainer}}["{{paramName}}"]{{/isListContainer}}{{^isListContainer}}.Get("{{paramName}}"){{/isListContainer}}
+			if err := cast{{#isListContainer}}Array{{/isListContainer}}({{paramName}}Str, &{{paramName}}); err != nil {
+				writeJSON(w, http.StatusBadRequest, ErrorResponse{
+					Title:  "Invalid Query Parameter",
+					Detail: "Query parameter `{{paramName}}` must be a {{dataType}}, but " + fmt.Sprintf("%#v", {{paramName}}Str) + " specified.\n" + err.Error(),
+				}, errorLogger)
+				return
+			}
+{{/queryParams}}
+
+			// get request body
+{{#bodyParam}}			var {{paramName}} {{dataType}}
+			if err := json.NewDecoder(req.Body).Decode(&{{paramName}}); err != nil {
+				errorLogger(newJSONDeserializationError(req, err))
+				writeJSONInternalServerError(w, errorLogger)
+				return
+			}
+{{/bodyParam}}
+
+			// invoke action
+			actionResult, err := options.Actions.{{nickname}}(req.Context(){{#pathParams}}, {{paramName}}{{/pathParams}}{{#queryParams}}, {{paramName}}{{/queryParams}}{{#bodyParam}}, {{paramName}}{{/bodyParam}})
+
+			// generate http response
+			if err != nil {
+				errorLogger(newActionError(req, err))
+				writeJSONInternalServerError(w, errorLogger)
+				return
+			}
+			switch r := actionResult.(type) {
+{{#responses}}			case {{#vendorExtensions}}{{x-responseDataType}}{{/vendorExtensions}}:
+				{{#dataType}}writeJSON(w, {{code}}, r.Body, errorLogger){{/dataType}}{{^dataType}}w.WriteHeader({{code}}){{/dataType}}
+{{/responses}}
+			default:
+				_ = r // no use error avoiding hack
+				errorLogger(newUnknownTypeActionResultError(req, actionResult))
+				writeJSONInternalServerError(w, errorLogger)
+				return
+			}
+		})
+
+{{/operation}}
+{{/operations}}{{/apis}}
+		return router
+	}
+}{{/apiInfo}}
