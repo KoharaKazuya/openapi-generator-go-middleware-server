@@ -15,7 +15,7 @@ $ docker run --rm -v ${PWD}:/local koharakazuya/openapi-generator-go-middleware-
 $ cd ./out/go-middleware-server/
 $ go fmt ./...
 $ goreturns -w ./**/*.go
-$ echo '/*\n!/autogen/' > .openapi-generator-ignore
+$ echo '/*\n!/openapisample/' > .openapi-generator-ignore
 ```
 
 [OpenAPI Generator]: https://openapi-generator.tech/
