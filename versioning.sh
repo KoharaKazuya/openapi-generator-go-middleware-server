@@ -12,3 +12,4 @@ replace() {
 
 replace "$version" './pom.xml'
 replace "$version" './Dockerfile'
+replace "$version" './src/main/resources/go-middleware-server/openapi/partial_header.mustache'
