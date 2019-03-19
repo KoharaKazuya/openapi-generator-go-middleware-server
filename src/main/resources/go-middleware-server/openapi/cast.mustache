@@ -12,6 +12,11 @@ import (
 
 // cast converts from string of `from` to type `to`
 func cast(from string, to interface{}) error {
+	// 空文字なら to に何も代入しない (= ゼロ値) とする
+	if from == "" {
+		return nil
+	}
+
 	switch v := to.(type) {
 	case (*int32):
 		v64, err := strconv.ParseInt(from, 10, 64)
