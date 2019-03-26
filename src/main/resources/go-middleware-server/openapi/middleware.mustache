@@ -14,31 +14,21 @@ import (
 	"github.com/go-chi/chi"
 )
 
-// MiddlewareOptions は Middleware を生成するときのオプション
-type MiddlewareOptions struct {
-	Actions          Actions
-	// ErrorLogger は Middleware 中で発生したエラーを記録する関数
-	ErrorLogger func(error)
-	// DocumentFilePath は OpenAPI ドキュメントであるファイルのパス
-	DocumentFilePath string
-}
-
 // NewMiddleware は新しく Middleware を生成する
 // Middleware は `func(http.Handler) http.Handler` のシグネチャを持つ関数
-func NewMiddleware(options MiddlewareOptions) func(http.Handler) http.Handler {
-	// Normalize options
-	errorLogger := options.ErrorLogger
-	if errorLogger == nil {
-		errorLogger = func(err error) { log.Printf("%+v\n", err) }
+func NewMiddleware(optionFuncs ...MiddlewareOption) (func(http.Handler) http.Handler, error) {
+	options := middlewareOptions{
+		errorLogger:      func(err error) { log.Printf("%+v\n", err) },
+		documentFilePath: filepath.Join("api", "openapi.yaml"),
 	}
-
-	docPath := options.DocumentFilePath
-	if docPath == "" {
-		docPath = filepath.Join("api", "openapi.yaml")
+	for _, f := range optionFuncs {
+		if err := f(&options); err != nil {
+			return nil, err
+		}
 	}
 
 	return func(next http.Handler) http.Handler {
-		kinRouter := openapi3filter.NewRouter().WithSwaggerFromFile(docPath)
+		kinRouter := openapi3filter.NewRouter().WithSwaggerFromFile(options.documentFilePath)
 		router := chi.NewRouter()
 
 		router.NotFound(next.ServeHTTP)
@@ -47,16 +37,16 @@ func NewMiddleware(options MiddlewareOptions) func(http.Handler) http.Handler {
 {{#apis}}{{#operations}}		// {{classname}}
 {{#operation}}		router.{{httpMethod}}("{{{basePathWithoutHost}}}{{{path}}}", func(w http.ResponseWriter, req *http.Request) {
 			// make sure action implemented
-			if options.Actions.{{nickname}} == nil {
-				writeJSONActionNotImplemented(w, errorLogger, "{{nickname}}")
+			if options.actions.{{nickname}} == nil {
+				writeJSONActionNotImplemented(w, options.errorLogger, "{{nickname}}")
 				return
 			}
 
 			// validate request
 			kinRoute, pathParams, err := kinRouter.FindRoute(req.Method, req.URL)
 			if err != nil {
-				errorLogger(newKinFindRouteError(req, err))
-				writeJSONInternalServerError(w, errorLogger)
+				options.errorLogger(newKinFindRouteError(req, err))
+				writeJSONInternalServerError(w, options.errorLogger)
 				return
 			}
 			if err := openapi3filter.ValidateRequest(
@@ -70,7 +60,7 @@ func NewMiddleware(options MiddlewareOptions) func(http.Handler) http.Handler {
 				writeJSON(w, http.StatusBadRequest, ErrorResponse{
 					Title:  "Invalid Request",
 					Detail: err.Error(),
-				}, errorLogger)
+				}, options.errorLogger)
 				return
 			}
 
@@ -81,7 +71,7 @@ func NewMiddleware(options MiddlewareOptions) func(http.Handler) http.Handler {
 				writeJSON(w, http.StatusBadRequest, ErrorResponse{
 					Title:  "Invalid Path Parameter",
 					Detail: "Path parameter `{{paramName}}` must be a {{dataType}}, but \"" + {{paramName}}Str + "\" specified.\n" + err.Error(),
-				}, errorLogger)
+				}, options.errorLogger)
 				return
 			}
 {{/pathParams}}
@@ -93,7 +83,7 @@ func NewMiddleware(options MiddlewareOptions) func(http.Handler) http.Handler {
 				writeJSON(w, http.StatusBadRequest, ErrorResponse{
 					Title:  "Invalid Query Parameter",
 					Detail: "Query parameter `{{paramName}}` must be a {{dataType}}, but " + fmt.Sprintf("%#v", {{paramName}}Str) + " specified.\n" + err.Error(),
-				}, errorLogger)
+				}, options.errorLogger)
 				return
 			}
 {{/queryParams}}
@@ -101,29 +91,29 @@ func NewMiddleware(options MiddlewareOptions) func(http.Handler) http.Handler {
 			// get request body
 {{#bodyParam}}			var {{paramName}} {{dataType}}
 			if err := json.NewDecoder(req.Body).Decode(&{{paramName}}); err != nil {
-				errorLogger(newJSONDeserializationError(req, err))
-				writeJSONInternalServerError(w, errorLogger)
+				options.errorLogger(newJSONDeserializationError(req, err))
+				writeJSONInternalServerError(w, options.errorLogger)
 				return
 			}
 {{/bodyParam}}
 
 			// invoke action
-			actionResult, err := options.Actions.{{nickname}}(req.Context(){{#pathParams}}, {{paramName}}{{/pathParams}}{{#queryParams}}, {{paramName}}{{/queryParams}}{{#bodyParam}}, {{paramName}}{{/bodyParam}})
+			actionResult, err := options.actions.{{nickname}}(req.Context(){{#pathParams}}, {{paramName}}{{/pathParams}}{{#queryParams}}, {{paramName}}{{/queryParams}}{{#bodyParam}}, {{paramName}}{{/bodyParam}})
 
 			// generate http response
 			if err != nil {
-				errorLogger(newActionError(req, err))
-				writeJSONInternalServerError(w, errorLogger)
+				options.errorLogger(newActionError(req, err))
+				writeJSONInternalServerError(w, options.errorLogger)
 				return
 			}
 			switch r := actionResult.(type) {
 {{#responses}}			case {{#vendorExtensions}}{{x-responseDataType}}{{/vendorExtensions}}:
-				{{#dataType}}writeJSON(w, {{code}}, r.Body, errorLogger){{/dataType}}{{^dataType}}w.WriteHeader({{code}}){{/dataType}}
+				{{#dataType}}writeJSON(w, {{code}}, r.Body, options.errorLogger){{/dataType}}{{^dataType}}w.WriteHeader({{code}}){{/dataType}}
 {{/responses}}
 			default:
 				_ = r // no use error avoiding hack
-				errorLogger(newUnknownTypeActionResultError(req, actionResult))
-				writeJSONInternalServerError(w, errorLogger)
+				options.errorLogger(newUnknownTypeActionResultError(req, actionResult))
+				writeJSONInternalServerError(w, options.errorLogger)
 				return
 			}
 		})
@@ -131,5 +121,38 @@ func NewMiddleware(options MiddlewareOptions) func(http.Handler) http.Handler {
 {{/operation}}
 {{/operations}}{{/apis}}
 		return router
+	}, nil
+}
+
+type middlewareOptions struct {
+	actions          Actions
+	errorLogger      func(error)
+	documentFilePath string
+}
+
+// MiddlewareOption の NewMiddleware の引数として渡せるオプション
+type MiddlewareOption func(*middlewareOptions) error
+
+// WithActions は指定した各種 Action を使用するように設定する
+func WithActions(actions Actions) MiddlewareOption {
+	return func(opt *middlewareOptions) error {
+		opt.actions = actions
+		return nil
+	}
+}
+
+// WithErrorLogger は Middleware 中で発生したエラーを指定した関数で記録するように設定する
+func WithErrorLogger(logger func(error)) MiddlewareOption {
+	return func(opt *middlewareOptions) error {
+		opt.errorLogger = logger
+		return nil
+	}
+}
+
+// WithDocumentFilePath は OpenAPI ドキュメントであるファイルのパスを設定する
+func WithDocumentFilePath(path string) MiddlewareOption {
+	return func(opt *middlewareOptions) error {
+		opt.documentFilePath = path
+		return nil
 	}
 }{{/apiInfo}}
