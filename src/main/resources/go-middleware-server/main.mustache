@@ -9,10 +9,12 @@ import (
 )
 
 func main() {
-	router := {{packageName}}.NewMiddleware({{packageName}}.MiddlewareOptions{
-		Actions: {{packageName}}.Actions{
-		},
-	})
+	router, err := {{packageName}}.NewMiddleware(
+		{{packageName}}.WithActions({{packageName}}.Actions{}),
+	)
+	if err != nil {
+		panic(err)
+	}
 	middlewares := []func(http.Handler) http.Handler{
 		middleware.Logger,
 		middleware.Recoverer,
