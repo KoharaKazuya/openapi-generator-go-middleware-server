@@ -8,7 +8,7 @@ RUN mvn package
 
 FROM openapitools/openapi-generator-cli:v4.0.0-beta2
 
-COPY --from=builder /work/target/openapi-generator-go-middleware-server-0.0.0-SNAPSHOT.jar /opt/
+COPY --from=builder /work/target/openapi-generator-go-middleware-server-0.2.0.jar /opt/
 
-ENTRYPOINT ["java", "-classpath", "/opt/openapi-generator/modules/openapi-generator-cli/target/openapi-generator-cli.jar:/opt/openapi-generator-go-middleware-server-0.0.0-SNAPSHOT.jar", "org.openapitools.codegen.OpenAPIGenerator"]
+ENTRYPOINT ["java", "-classpath", "/opt/openapi-generator/modules/openapi-generator-cli/target/openapi-generator-cli.jar:/opt/openapi-generator-go-middleware-server-0.2.0.jar", "org.openapitools.codegen.OpenAPIGenerator"]
 CMD ["help"]
