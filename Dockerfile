@@ -2,8 +2,10 @@ FROM maven:3.6.0-jdk-8-alpine AS builder
 
 RUN mkdir /work
 WORKDIR /work
+COPY ./pom.xml /work/
+RUN mvn --batch-mode package
 COPY . /work/
-RUN mvn package
+RUN mvn --batch-mode package
 
 
 FROM openapitools/openapi-generator-cli:v4.3.0
