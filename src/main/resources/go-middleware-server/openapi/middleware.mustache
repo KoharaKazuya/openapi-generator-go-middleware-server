@@ -19,7 +19,6 @@ import (
 func NewMiddleware(optionFuncs ...MiddlewareOption) (func(http.Handler) http.Handler, error) {
 	options := middlewareOptions{
 		errorLogger:      func(err error) { log.Printf("%+v\n", err) },
-		documentFilePath: filepath.Join("api", "openapi.yaml"),
 	}
 	for _, f := range optionFuncs {
 		if err := f(&options); err != nil {
@@ -28,7 +27,7 @@ func NewMiddleware(optionFuncs ...MiddlewareOption) (func(http.Handler) http.Han
 	}
 
 	return func(next http.Handler) http.Handler {
-		kinRouter := openapi3filter.NewRouter().WithSwaggerFromFile(options.documentFilePath)
+		kinRouter := openapi3filter.NewRouter().WithSwagger(loadOpenAPIDocument())
 		router := chi.NewRouter()
 
 		router.NotFound(next.ServeHTTP)
@@ -127,7 +126,6 @@ func NewMiddleware(optionFuncs ...MiddlewareOption) (func(http.Handler) http.Han
 type middlewareOptions struct {
 	actions          Actions
 	errorLogger      func(error)
-	documentFilePath string
 }
 
 // MiddlewareOption の NewMiddleware の引数として渡せるオプション
@@ -145,14 +143,6 @@ func WithActions(actions Actions) MiddlewareOption {
 func WithErrorLogger(logger func(error)) MiddlewareOption {
 	return func(opt *middlewareOptions) error {
 		opt.errorLogger = logger
-		return nil
-	}
-}
-
-// WithDocumentFilePath は OpenAPI ドキュメントであるファイルのパスを設定する
-func WithDocumentFilePath(path string) MiddlewareOption {
-	return func(opt *middlewareOptions) error {
-		opt.documentFilePath = path
 		return nil
 	}
 }{{/apiInfo}}

@@ -1,0 +1,24 @@
+{{>openapi/partial_header}}
+package {{packageName}}
+
+import (
+	"strings"
+
+	"github.com/getkin/kin-openapi/openapi3"
+)
+
+var openAPIDocumentData = []string{
+	{{#openapi-yaml-escaped-lines}}
+	"{{{.}}}",
+	{{/openapi-yaml-escaped-lines}}
+}
+
+// loadOpenAPIDocument loads embedded spec file of API
+func loadOpenAPIDocument() *openapi3.Swagger {
+	data := []byte(strings.Join(openAPIDocumentData, "\n"))
+	swagger, err := openapi3.NewSwaggerLoader().LoadSwaggerFromData(data)
+	if err != nil {
+		panic(err)
+	}
+	return swagger
+}
