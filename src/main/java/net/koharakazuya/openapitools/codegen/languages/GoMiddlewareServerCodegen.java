@@ -54,8 +54,8 @@ public class GoMiddlewareServerCodegen extends AbstractGoCodegen {
          * a different extension
          */
         modelTemplateFiles.put(
-                "openapi/model.mustache",
-                ".go");
+            "openapi/model.mustache",
+            ".go");
 
         /*
          * Api classes.  You can write classes for each Api file with the apiTemplateFiles map.
@@ -63,8 +63,8 @@ public class GoMiddlewareServerCodegen extends AbstractGoCodegen {
          * class
          */
         apiTemplateFiles.put(
-                "openapi/api.mustache",   // the template to use
-                ".go");       // the extension for each file to write
+            "openapi/api.mustache",   // the template to use
+            ".go");       // the extension for each file to write
 
         /**
          * Template Location.  This is the location which templates will be read from.  The generator
@@ -101,7 +101,6 @@ public class GoMiddlewareServerCodegen extends AbstractGoCodegen {
          * entire object tree available.  If the input file has a suffix of `.mustache
          * it will be processed by the template engine.  Otherwise, it will be copied
          */
-        supportingFiles.add(new SupportingFile("api/openapi.mustache", "api", "openapi.yaml"));
         supportingFiles.add(new SupportingFile("go.mustache", "", "go.mod"));
         supportingFiles.add(new SupportingFile("main.mustache", "", "main.go"));
         supportingFiles.add(new SupportingFile("openapi/action.mustache", packageName, "action.go"));
@@ -110,6 +109,7 @@ public class GoMiddlewareServerCodegen extends AbstractGoCodegen {
         supportingFiles.add(new SupportingFile("openapi/middleware.mustache", packageName, "middleware.go"));
         supportingFiles.add(new SupportingFile("openapi/response.mustache", packageName, "response.go"));
         supportingFiles.add(new SupportingFile("openapi/response_writer.mustache", packageName, "response_writer.go"));
+        supportingFiles.add(new SupportingFile("openapi/spec.mustache", packageName, "spec.go"));
     }
 
     @Override
@@ -129,5 +129,20 @@ public class GoMiddlewareServerCodegen extends AbstractGoCodegen {
         }
 
         return objs;
+    }
+
+    @Override
+    public void generateYAMLSpecFile(Map<String, Object> objs) {
+        super.generateYAMLSpecFile(objs);
+
+        @SuppressWarnings("unchecked")
+        String yaml = (String) objs.get("openapi-yaml");
+        if (yaml != null) {
+            String[] lines = yaml
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .split("\n");
+            objs.put("openapi-yaml-escaped-lines", lines);
+        }
     }
 }
